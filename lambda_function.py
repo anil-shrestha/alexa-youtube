@@ -425,8 +425,41 @@ def add_to_list(event, title):
         logger.info('Created item')
         trim_list(event, listId)
 
+def check_favorite_videos(event, query)
+    listId = get_list_id(event, 'YouTube Favorites')
+    items = get_list(event, listId)
+    for item in items:
+        val = item['value']
+        name, url = val.split('|')
+        if query.lower() == name.lower().strip():
+            videos, playlist_channel_video = get_videos_from_url(url.strip())
+    return videos, playlist_channel_video
+
+def get_videos_from_url(url):
+    t = re.search('youtube.com\/watch\?v=.*&list=([^&]+)', url, re.I)
+    if t:
+        playlist_id = t.groups()[0]
+        videos = get_videos_from_playlist(playlist_id)
+        return videos, strings['playlist']
+    t = re.search('youtube.com\/playlist\?list=([^&]+)', url, re.I)
+    if t:
+        playlist_id = t.groups()[0]
+        videos = get_videos_from_playlist(playlist_id)
+        return videos, strings['playlist']
+    t = re.search('youtube.com\/watch\?v=([^&]+)', url, re.I)
+    if t:
+        video_id = t.groups()[0]
+        return video_id, strings['video']
+    t = re.search('youtube.com\/channel\/([^&]+)', url, re.I)
+    if t:
+        channel_id = t.groups()[0]
+        videos, errorMessage = video_search(channelId=channel_id):
+        return videos, strings['channel']
+    return [], strings['video']
+
 def get_welcome_response(event):
     list_created = create_list(event, 'YouTube')
+    list_created = create_list(event, 'YouTube Favorites')
     speech_output = strings['welcome1']
     reprompt_text = strings['welcome2']
     should_end_session = False
@@ -455,10 +488,11 @@ def illegal_action():
 def do_nothing():
     return build_response({})
 
-def video_search(query, relatedToVideoId=None):
+def video_search(query=None, relatedToVideoId=None, channelId=None):
     try:
         search_response = youtube.search().list(
             q=query,
+            channelId=channelId,
             part='id,snippet',
             maxResults=50,
             relatedToVideoId=relatedToVideoId,
@@ -489,9 +523,15 @@ def playlist_search(query, sr, do_shuffle='0'):
     sr = playlist
     logger.info('Playlist info: https://www.youtube.com/playlist?list='+playlist_id)
     playlist_title = search_response.get('items')[sr]['snippet']['title']
+    videos = get_videos_from_playlist(playlist_id)
+    if do_shuffle == '1':
+        shuffle(videos)
+    return videos[0:50], playlist_title, sr
+
+def get_videos_from_playlist(playlist_id):
     videos = []
     data={'nextPageToken':''}
-    while 'nextPageToken' in data and len(videos) < 200:
+    while 'nextPageToken' in data and len(videos) < 100:
         next_page_token = data['nextPageToken']
         data = youtube.playlistItems().list(part='snippet',maxResults=50,playlistId=playlist_id,pageToken=next_page_token).execute()
         for item in data['items']:
@@ -499,9 +539,7 @@ def playlist_search(query, sr, do_shuffle='0'):
                 videos.append(item['snippet']['resourceId']['videoId'])
             except:
                 pass
-    if do_shuffle == '1':
-        shuffle(videos)
-    return videos[0:50], playlist_title, sr
+    return videos
 
 def my_playlists_search(query, sr, do_shuffle='0'):
     channel_id = None
@@ -672,23 +710,25 @@ def search(event):
     if intent_name == "ShuffleIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "ShuffleChannelIntent" or intent_name == "ShuffleMyPlaylistsIntent":
         playlist['s'] = '1'
     playlist['l'] = '0'
-    if intent_name == "PlaylistIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "NextPlaylistIntent":
-        videos, playlist_title, playlist['sr'] = playlist_search(query, sr, playlist['s'])
-        playlist_channel_video = strings['playlist']
-    elif intent_name == "SearchMyPlaylistsIntent" or intent_name == "ShuffleMyPlaylistsIntent":
-        videos, playlist_title, playlist['sr'] = my_playlists_search(query, sr, playlist['s'])
-        playlist_channel_video = strings['playlist']
-    elif intent_name == "ChannelIntent" or intent_name == "ShuffleChannelIntent":
-        videos, playlist_title = channel_search(query, sr, playlist['s'])
-        playlist_channel_video = strings['channel']
-    elif intent_name == "PlayMyLatestVideoIntent":
-        videos = my_latest_video()
-        playlist_channel_video = strings['video']
-    else:
-        videos, errorMessage = video_search(query)
-        playlist_channel_video = strings['video']
-    if videos == False:
-        return build_response(build_cardless_speechlet_response(errorMessage, None, True))
+    videos, playlist_channel_video = check_favorite_videos(event, query)
+    if videos == []:
+        if intent_name == "PlaylistIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "NextPlaylistIntent":
+            videos, playlist_title, playlist['sr'] = playlist_search(query, sr, playlist['s'])
+            playlist_channel_video = strings['playlist']
+        elif intent_name == "SearchMyPlaylistsIntent" or intent_name == "ShuffleMyPlaylistsIntent":
+            videos, playlist_title, playlist['sr'] = my_playlists_search(query, sr, playlist['s'])
+            playlist_channel_video = strings['playlist']
+        elif intent_name == "ChannelIntent" or intent_name == "ShuffleChannelIntent":
+            videos, playlist_title = channel_search(query, sr, playlist['s'])
+            playlist_channel_video = strings['channel']
+        elif intent_name == "PlayMyLatestVideoIntent":
+            videos = my_latest_video()
+            playlist_channel_video = strings['video']
+        else:
+            videos, errorMessage = video_search(query)
+            playlist_channel_video = strings['video']
+        if videos == False:
+            return build_response(build_cardless_speechlet_response(errorMessage, None, True))
     if videos == []:
         return build_response(build_cardless_speechlet_response(strings['novideo'], None, True))
     next_url = None
