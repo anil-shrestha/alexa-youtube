@@ -425,8 +425,10 @@ def add_to_list(event, title):
         logger.info('Created item')
         trim_list(event, listId)
 
-def check_favorite_videos(event, query)
+def check_favorite_videos(event, query):
     listId = get_list_id(event, 'YouTube Favorites')
+    if listId is None:
+        return [], strings['video']
     items = get_list(event, listId)
     for item in items:
         val = item['value']
@@ -453,7 +455,7 @@ def get_videos_from_url(url):
     t = re.search('youtube.com\/channel\/([^&]+)', url, re.I)
     if t:
         channel_id = t.groups()[0]
-        videos, errorMessage = video_search(channelId=channel_id):
+        videos, errorMessage = video_search(channelId=channel_id)
         return videos, strings['channel']
     return [], strings['video']
 
