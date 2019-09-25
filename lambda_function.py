@@ -3,8 +3,6 @@ from __future__ import print_function
 from os import environ
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from pytube import YouTube
-from pytube.exceptions import LiveStreamError
 from urllib2 import HTTPError
 import logging
 from random import shuffle, randint
@@ -380,9 +378,11 @@ def create_list_item(event, listId, title):
         timestamp = event['request']['timestamp']
         utc = datetime.strptime(timestamp,'%Y-%m-%dT%H:%M:%SZ')
         from_zone = tz.tzutc()
-        timezone = 'Europe/London'
-        if event['request']['locale'] in locales:
-            timezone = locales[event['request']['locale']]
+        timezone = get_time_zone(event)
+        if type(timezone) != str:
+            timezone = 'Europe/London'
+            if event['request']['locale'] in locales:
+                timezone = locales[event['request']['locale']]
         to_zone = tz.gettz(timezone)
         utc = utc.replace(tzinfo=from_zone)
         local = utc.astimezone(to_zone)
@@ -619,9 +619,41 @@ def channel_search(query, sr, do_shuffle='0'):
     return videos[0:50], playlist_title
 
 def get_url_and_title(id):
-    logger.info('Getting url for https://www.youtube.com/watch?v='+id)
+    if 'youtube_dl' in environ and environ['youtube_dl'].lower() == 'true':
+        return get_url_and_title_youtube_dl(id)
+    else:
+        return get_url_and_title_pytube(id)
+
+def get_url_and_title_youtube_dl(id):
+    import youtube_dl
+    logger.info('Getting youtube-dl url for https://www.youtube.com/watch?v='+id)
+    youtube_dl_properties = {}
+    if 'proxy_enabled' in environ and 'proxy' in environ and environ['proxy_enabled'].lower() == 'true':
+        youtube_dl_properties['proxy'] = environ['proxy']
+    with youtube_dl.YoutubeDL(youtube_dl_properties) as ydl:
+        yt_url = 'http://www.youtube.com/watch?v='+id
+        info = ydl.extract_info(yt_url, download=False)
+    if info['is_live'] == True:
+        video_or_audio[1] = 'video'
+        return info['url'], info['title']
+        #return get_live_video_url_and_title(id) # Test both of these
+    for f in info['formats']:
+        if video_or_audio[1] == 'audio' and f['vcodec'] == 'none' and f['ext'] == 'm4a':
+            return f['url'], info['title'] # Test this
+        if video_or_audio[1] == 'video' and f['vcodec'] != 'none' and f['acodec'] != 'none':
+            return f['url'], info['title'] # Test this
+    logger.info('Unable to get URL for '+id)
+    return None, None
+
+def get_url_and_title_pytube(id):
+    from pytube import YouTube
+    from pytube.exceptions import LiveStreamError
+    proxy_list = {}
+    if 'proxy_enabled' in environ and 'proxy' in environ and environ['proxy_enabled'] == 'true':
+        proxy_list = {'https': environ['proxy']}
+    logger.info('Getting pytube url for https://www.youtube.com/watch?v='+id)
     try:
-        yt=YouTube('https://www.youtube.com/watch?v='+id)
+        yt=YouTube('https://www.youtube.com/watch?v='+id, proxies = proxy_list)
     except LiveStreamError:
         logger.info(id+' is a live video')
         return get_live_video_url_and_title(id)
@@ -1023,6 +1055,18 @@ def get_next_url_and_token(current_token, skip):
     playlist['p'] = str(next_playing)
     next_token = convert_dict_to_token(playlist)
     return next_url, next_token, title
+
+def get_time_zone(event):
+    try:
+        deviceId = event['context']['System']['device']['deviceId']
+        apiAccessToken = event['context']['System']['apiAccessToken']
+        apiEndpoint = event['context']['System']['apiEndpoint']
+        headers = {'Authorization': 'Bearer '+apiAccessToken}
+        url = apiEndpoint + '/v2/devices/'+deviceId+'/settings/System.timeZone'
+        r = requests.get(url, headers=headers)
+        return r.json()
+    except:
+        return []
 
 def stopped(event):
     offsetInMilliseconds = event['request']['offsetInMilliseconds']
