@@ -426,6 +426,7 @@ def add_to_list(event, title):
         trim_list(event, listId)
 
 def check_favorite_videos(event, query):
+    videos, playlist_channel_video = [], strings['video']
     listId = get_list_id(event, 'YouTube Favorites')
     if listId is None:
         return [], strings['video']
