@@ -205,6 +205,8 @@ def build_video_response(title, output, url):
 # --------------- Main handler ------------------
 
 def lambda_handler(event, context):
+    if 'expires' in environ and int(datetime.strftime(datetime.now(),'%Y%m%d')) > int(environ['expires']):
+        return skill_expired()
     global strings
     if event['request']['locale'][0:2] == 'fr':
         strings = strings_fr
@@ -379,7 +381,7 @@ def create_list_item(event, listId, title):
         utc = datetime.strptime(timestamp,'%Y-%m-%dT%H:%M:%SZ')
         from_zone = tz.tzutc()
         timezone = get_time_zone(event)
-        if type(timezone) != str:
+        if type(timezone) != unicode:
             timezone = 'Europe/London'
             if event['request']['locale'] in locales:
                 timezone = locales[event['request']['locale']]
@@ -633,9 +635,16 @@ def get_url_and_title_youtube_dl(id):
     youtube_dl_properties = {}
     if 'proxy_enabled' in environ and 'proxy' in environ and environ['proxy_enabled'].lower() == 'true':
         youtube_dl_properties['proxy'] = environ['proxy']
-    with youtube_dl.YoutubeDL(youtube_dl_properties) as ydl:
-        yt_url = 'http://www.youtube.com/watch?v='+id
-        info = ydl.extract_info(yt_url, download=False)
+    try:
+        with youtube_dl.YoutubeDL(youtube_dl_properties) as ydl:
+            yt_url = 'http://www.youtube.com/watch?v='+id
+            info = ydl.extract_info(yt_url, download=False)
+    except HTTPError as e:
+        logger.info('HTTPError code '+str(e.code))
+        return False,False
+    except:
+        logger.info('Other ytdl error')
+        return False,False
     if info['is_live'] == True:
         video_or_audio[1] = 'video'
         return info['url'], info['title']
@@ -724,7 +733,9 @@ def search(event):
     query = ''
     if 'slots' in intent and 'query' in intent['slots']:
         query = intent['slots']['query']['value']
-        logger.info('Looking for: ' + query)
+    if environ['AWS_LAMBDA_FUNCTION_NAME'] == 'YouTubeTest':
+        query = 'gangnam style'
+    logger.info('Looking for: ' + query)
     should_end_session = True
     intent_name = intent['name']
     playlist_title = None
@@ -1103,3 +1114,10 @@ def failed(event):
     if title is None:
         return do_nothing()
     return build_response(build_audio_enqueue_response(should_end_session, next_url, current_token, next_token, playBehavior))
+
+def skill_expired():
+    speech_output='<speak><voice name="Brian"><prosody rate="medium">'
+    speech_output += 'Hi there, this is the developer. Unfortunately your patreon subscription has expired. '
+    speech_output += 'If you would like to continue using this skill, please go to patreon.com/alexayoutube to renew your subscription. '
+    speech_output += '</prosody></voice></speak> '
+    return build_response(build_cardless_speechlet_response(speech_output, '', True, 'SSML'))
