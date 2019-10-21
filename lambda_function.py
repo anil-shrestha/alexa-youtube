@@ -206,6 +206,8 @@ def lambda_handler(event, context):
         strings = strings_es
     elif event['request']['locale'][0:2] == 'ja':
         strings = strings_ja
+    elif event['request']['locale'][0:2] == 'pt':
+        strings = strings_pt
     else:
         strings = strings_en
     global video_or_audio
@@ -569,7 +571,7 @@ def get_url_and_title(id):
     if 'youtube_dl' in environ and (environ['youtube_dl'].lower() == 'true' or 'http' in environ['youtube_dl']):
         return get_url_and_title_youtube_dl(id)
     else:
-        return get_url_and_title_pytube(id)
+        return get_urls_and_title_pytube(id)
 
 def get_url_and_title_youtube_dl(id, retry=True):
     if 'youtube_dl' in environ and 'http' in environ['youtube_dl']:
