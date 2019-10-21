@@ -210,6 +210,9 @@ def lambda_handler(event, context):
         strings = strings_pt
     else:
         strings = strings_en
+    for key in strings_en:
+        if key not in strings:
+            strings[key] = strings_en[key]
     global video_or_audio
     video_or_audio = [False, 'audio']
     if 'VideoApp' in event['context']['System']['device']['supportedInterfaces']:
@@ -571,7 +574,7 @@ def get_url_and_title(id):
     if 'youtube_dl' in environ and (environ['youtube_dl'].lower() == 'true' or 'http' in environ['youtube_dl']):
         return get_url_and_title_youtube_dl(id)
     else:
-        return get_urls_and_title_pytube(id)
+        return get_url_and_title_pytube(id)
 
 def get_url_and_title_youtube_dl(id, retry=True):
     if 'youtube_dl' in environ and 'http' in environ['youtube_dl']:
