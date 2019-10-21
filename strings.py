@@ -58,6 +58,11 @@ strings_en = {
 'minute':"minute",
 'seconds':"seconds",
 'second':"second",
+'throttled':"This skill is being throttled by YouTube, please try again later.",
+'error403':"Sorry, this skill has hit it's usage limit for today.",
+'apikeyerror':"Sorry, there was a problem with the Youtube API key.",
+'youtubeerror':"There was a problem with the youtube search response.",
+'nochannelid':"You do not have a channel id set.",
 }
 strings_fr = {
 'welcome1':"Bienvenue sur Youtube. Dite, par exemple, jouer une vidéo de Madonna.",
@@ -80,7 +85,14 @@ strings_fr = {
 'nothingplaying':"Il n'y a aucune lecture en cours.",
 'sorryskipby':"Désolé, je n'ai pas compris de combien je devais avancer ou reculer.",
 'sorryskipto':"Désolé, je n'ai pas compris de combien je devais avancer ou reculer.",
-'ok':"OK"
+'ok':"OK",
+'currentposition':"La position actuelle est",
+'hours':"heures",
+'hour':"heure",
+'minutes':"minutes",
+'minute':"minute",
+'seconds':"secondes",
+'second':"seconde",
 }
 strings_it = {
 'welcome1':"Benvenuto su YouTube. Dì, per esempio, riproduci video dei Beatles.",
@@ -103,7 +115,14 @@ strings_it = {
 'nothingplaying':"Al momento non sto riproducendo nulla.",
 'sorryskipby':"Spiacente, non ho capito di quanto saltare",
 'sorryskipto':"Spiacente, non ho capito dove saltare",
-'ok':"OK"
+'ok':"OK",
+'currentposition':"La posizione attuale è",
+'hours':"ore",
+'hour':"ora",
+'minutes':"minuti",
+'minute':"minuto",
+'seconds':"secondi",
+'second':"secondo",
 }
 strings_de = {
 'welcome1':"Herzlich willkommen bei Youtube. Was kann ich für Dich tun? Sage zum Beispiel 'spiel Videos von The Beatles'.",

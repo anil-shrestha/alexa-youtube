@@ -474,12 +474,12 @@ def video_search(query, relatedToVideoId=None):
     try:
         search_response = youtube_search(query, 'video', 50, relatedToVideoId)
     except:
-        return False, "There was a problem with the youtube search response."
+        return False, strings['youtubeerror']
     if 'error' in search_response:
         if search_response['error']['code'] == 403:
-            return False, "Sorry, this skill has hit it's usage limit for today. Please consider deploying the skill yourself for unlimited use"
+            return False, strings['error403']
         else:
-            return False, "Sorry, there was a problem with the Youtube API key"
+            return False, strings['apikeyerror']
     videos = []
     for search_result in search_response.get('items', []):
         if 'videoId' in search_result['id']:
@@ -544,7 +544,7 @@ def my_latest_video():
     if 'MY_CHANNEL_ID' in environ:
         channel_id = environ['MY_CHANNEL_ID']
     if channel_id is None:
-        return build_response(build_short_speechlet_response('You do not have a channel id set', True))
+        return build_response(build_short_speechlet_response(strings['nochannelid'], True))
     search_response = youtube_search(None, 'video', 50, channel_id=channel_id, order='date')
     videos = []
     for search_result in search_response.get('items', []):
@@ -606,12 +606,11 @@ def get_url_and_title_youtube_dl(id, retry=True):
     if info['is_live'] == True:
         video_or_audio[1] = 'video'
         return info['url'], info['title']
-        #return get_live_video_url_and_title(id) # Test both of these
     for f in info['formats']:
         if video_or_audio[1] == 'audio' and f['vcodec'] == 'none' and f['ext'] == 'm4a':
-            return f['url'], info['title'] # Test this
+            return f['url'], info['title']
         if video_or_audio[1] == 'video' and f['vcodec'] != 'none' and f['acodec'] != 'none':
-            return f['url'], info['title'] # Test this
+            return f['url'], info['title']
     logger.info('Unable to get URL for '+id)
     return None, None
 
@@ -758,7 +757,7 @@ def search(event):
             playlist['p'] = i
             next_url, title = get_url_and_title(id)
     if next_url == False:
-        return build_response(build_short_speechlet_response('This skill is being throttled by YouTube, please try again later', True))
+        return build_response(build_short_speechlet_response(strings['throttled'], True))
     next_token = convert_dict_to_token(playlist)
     if playlist_title is None:
         speech_output = strings['playing'] + ' ' + title
@@ -811,7 +810,7 @@ def play_more_like_this(event):
             playlist['p'] = i
             next_url, title = get_url_and_title(id)
     if next_url == False:
-        return build_response(build_short_speechlet_response('This skill is being throttled by YouTube, please try again later', True))
+        return build_response(build_short_speechlet_response(strings['throttled'], True))
     next_token = convert_dict_to_token(playlist)
     speech_output = strings['playing']+' '+title
     return build_response(build_cardless_audio_speechlet_response(speech_output, should_end_session, next_url, next_token))
@@ -837,7 +836,7 @@ def skip_action(event, skip):
                 next_url, title = get_url_and_title(id)
         next_token = convert_dict_to_token(playlist)
     if next_url == False:
-        return build_response(build_short_speechlet_response('This skill is being throttled by YouTube, please try again later', True))
+        return build_response(build_short_speechlet_response(strings['throttled'], True))
     speech_output = strings['playing']+' '+title
     return build_response(build_cardless_audio_speechlet_response(speech_output, should_end_session, next_url, next_token))
 
