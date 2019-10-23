@@ -375,7 +375,7 @@ def create_list_item(event, listId, title):
         utc = datetime.strptime(timestamp,'%Y-%m-%dT%H:%M:%SZ')
         from_zone = tz.tzutc()
         timezone = get_time_zone(event)
-        if type(timezone) != unicode:
+        if type(timezone) == list:
             timezone = 'Europe/London'
             if event['request']['locale'] in locales:
                 timezone = locales[event['request']['locale']]
@@ -1064,9 +1064,18 @@ def started(event):
     playlist = convert_token_to_dict(current_token)
     now_playing = playlist['p']
     id = playlist['v'+now_playing]
-    next_url, title = get_url_and_title(id)
+    title = get_title(id)
     if title:
         add_to_list(event, title)
+
+def get_title(id):
+    try:
+        params = {'part': 'snippet', 'id': id, 'key': environ['DEVELOPER_KEY']}
+        youtube_search_url = 'https://www.googleapis.com/youtube/v3/videos'
+        r = requests.get(youtube_search_url, params=params)
+        return r.json()['items'][0]['snippet']['title']
+    except:
+        return None
 
 def finished(event):
     logger.info('finished')
