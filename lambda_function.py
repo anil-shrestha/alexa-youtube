@@ -1,24 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from os import environ
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from urllib2 import HTTPError
+try:
+    from urllib.error import HTTPError # python3
+except:
+    from urllib2 import HTTPError # python2
 import logging
-from random import shuffle, randint
-from botocore.vendored import requests
+from random import shuffle, randrange
+import requests
 import re
-from time import time
 import json
 from datetime import datetime
 from dateutil import tz
-logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-DEVELOPER_KEY=environ['DEVELOPER_KEY']
-YOUTUBE_API_SERVICE_NAME = 'youtube'
-YOUTUBE_API_VERSION = 'v3'
-youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=DEVELOPER_KEY)
 from strings import *
 strings = strings_en
 
@@ -68,7 +63,6 @@ def build_audio_or_video_response(title, output, should_end_session, url, token,
     else:
         return build_audio_speechlet_response(title, output, should_end_session, url, token, offsetInMilliseconds=0)
 
- 
 def build_audio_speechlet_response(title, output, should_end_session, url, token, offsetInMilliseconds=0):
     return {
         'outputSpeech': {
@@ -94,7 +88,6 @@ def build_audio_speechlet_response(title, output, should_end_session, url, token
         'shouldEndSession': should_end_session
     }
 
-
 def build_cardless_audio_speechlet_response(output, should_end_session, url, token, offsetInMilliseconds=0):
     return {
         'outputSpeech': {
@@ -115,7 +108,6 @@ def build_cardless_audio_speechlet_response(output, should_end_session, url, tok
         'shouldEndSession': should_end_session
     }
 
-
 def build_audio_enqueue_response(should_end_session, url, previous_token, next_token, playBehavior='ENQUEUE'):
     to_return = {
         'directives': [{
@@ -135,7 +127,6 @@ def build_audio_enqueue_response(should_end_session, url, previous_token, next_t
         to_return['directives'][0]['audioItem']['stream']['expectedPreviousToken'] = str(previous_token)
     return to_return
 
-
 def build_cancel_speechlet_response(title, output, should_end_session):
     return {
         'outputSpeech': {
@@ -154,7 +145,6 @@ def build_cancel_speechlet_response(title, output, should_end_session):
         'shouldEndSession': should_end_session
     }
 
-
 def build_stop_speechlet_response(output, should_end_session):
     return {
         'outputSpeech': {
@@ -167,7 +157,6 @@ def build_stop_speechlet_response(output, should_end_session):
         'shouldEndSession': should_end_session
     }
 
-
 def build_short_speechlet_response(output, should_end_session):
     return {
         'outputSpeech': {
@@ -176,7 +165,6 @@ def build_short_speechlet_response(output, should_end_session):
         },
         'shouldEndSession': should_end_session
     }
-
 
 def build_response(speechlet_response, sessionAttributes={}):
     return {
@@ -218,8 +206,13 @@ def lambda_handler(event, context):
         strings = strings_es
     elif event['request']['locale'][0:2] == 'ja':
         strings = strings_ja
+    elif event['request']['locale'][0:2] == 'pt':
+        strings = strings_pt
     else:
         strings = strings_en
+    for key in strings_en:
+        if key not in strings:
+            strings[key] = strings_en[key]
     global video_or_audio
     video_or_audio = [False, 'audio']
     if 'VideoApp' in event['context']['System']['device']['supportedInterfaces']:
@@ -235,10 +228,11 @@ def lambda_handler(event, context):
         logger.info("on_session_ended")
     elif event['request']['type'].startswith('AudioPlayer'):
         return handle_playback(event)
-        
+
 # --------------- Events ------------------
 
 def on_intent(event):
+    logger.info(event)
     intent_name = event['request']['intent']['name']
     # Dispatch to your skill's intent handlers
     search_intents = ["SearchIntent", "PlayOneIntent", "PlaylistIntent", "SearchMyPlaylistsIntent", "ShuffleMyPlaylistsIntent", "ChannelIntent", "ShuffleIntent", "ShufflePlaylistIntent", "ShuffleChannelIntent", "PlayMyLatestVideoIntent"]
@@ -290,7 +284,7 @@ def on_intent(event):
         return play_more_like_this(event)
     else:
         raise ValueError("Invalid intent")
-        
+
 def handle_playback(event):
     request = event['request']
     if request['type'] == 'AudioPlayer.PlaybackStarted':
@@ -381,7 +375,7 @@ def create_list_item(event, listId, title):
         utc = datetime.strptime(timestamp,'%Y-%m-%dT%H:%M:%SZ')
         from_zone = tz.tzutc()
         timezone = get_time_zone(event)
-        if type(timezone) != unicode:
+        if type(timezone) == list:
             timezone = 'Europe/London'
             if event['request']['locale'] in locales:
                 timezone = locales[event['request']['locale']]
@@ -468,46 +462,60 @@ def get_welcome_response(event):
     speech_output = strings['welcome1']
     reprompt_text = strings['welcome2']
     should_end_session = False
-    if event['request']['locale'] == 'en-GB' and 'PLAY_ADVERT' in environ and randint(1,10) == 10:
-        advert1 = '<voice name="Brian"><prosody rate="fast">Do you want cheaper energy? '
-        advert2 = 'Go to <emphasis level="strong">bulb</emphasis>.co.uk/refer/<break time="0.1s"/>'
-        advert3 = 'mark<break time="0.1s"/><say-as interpret-as="digits">7441</say-as>, and when you join, you\'ll get £50 of credit.</prosody></voice> '
-        speech_output = advert1 + advert2 + advert3 + speech_output
-        userId = event['context']['System']['user']['userId']
-        payload = {'value1': userId}
-        r = requests.get(environ['PLAY_ADVERT'], params=payload)
     speech_output = '<speak>' + speech_output + '</speak>'
     return build_response(build_cardless_speechlet_response(speech_output, reprompt_text, should_end_session, 'SSML'))
-        
+
 def get_help():
     speech_output = strings['help']
     card_title = 'Youtube Help'
     should_end_session = False
     return build_response(build_speechlet_response(card_title, speech_output, None, should_end_session))
-            
+
 def illegal_action():
     speech_output = strings['illegal']
     should_end_session = True
     return build_response(build_short_speechlet_response(speech_output, should_end_session))
-        
+
 def do_nothing():
     return build_response({})
 
+def youtube_search(query, search_type, maxResults, relatedToVideoId=None, channel_id=None, order=None, pageToken=None):
+    params = {}
+    for kv in ([['q',query],['type',search_type],['maxResults',maxResults],
+        ['relatedToVideoId',relatedToVideoId],['channelId',channel_id],['order',order],['pageToken',pageToken],
+        ['part','id,snippet'],['key',environ['DEVELOPER_KEY']]]):
+        k = kv[0]
+        v = kv[1]
+        params[k] = v
+    youtube_search_url = 'https://www.googleapis.com/youtube/v3/search'
+    if 'youtube_search_url' in environ:
+        youtube_search_url = environ['youtube_search_url']
+    r = requests.get(youtube_search_url, params=params)
+    return r.json()
+
+def youtube_playlist_search(playlist_id, pageToken=None):
+    params = {}
+    for kv in ([['maxResults',50],['playlistId',playlist_id],['pageToken',pageToken],
+        ['part','snippet'],['key',environ['DEVELOPER_KEY']]]):
+        k = kv[0]
+        v = kv[1]
+        params[k] = v
+    youtube_search_url = 'https://www.googleapis.com/youtube/v3/playlistItems'
+    if 'youtube_playlist_search_url' in environ:
+        youtube_search_url = environ['youtube_playlist_search_url']
+    r = requests.get(youtube_search_url, params=params)
+    return r.json()
+
 def video_search(query=None, relatedToVideoId=None, channelId=None):
     try:
-        search_response = youtube.search().list(
-            q=query,
-            channelId=channelId,
-            part='id,snippet',
-            maxResults=50,
-            relatedToVideoId=relatedToVideoId,
-            type='video'
-            ).execute()
-    except HttpError as err:
-        if json.loads(err.content.decode('utf-8'))['error']['code'] == 403:
-            return False, "Sorry, this skill has hit it's usage limit for today. Please consider deploying the skill yourself for unlimited use"
+        search_response = youtube_search(query, 'video', 50, relatedToVideoId, channelId)
+    except:
+        return False, strings['youtubeerror']
+    if 'error' in search_response:
+        if search_response['error']['code'] == 403:
+            return False, strings['error403']
         else:
-            return False, "Sorry, there was a problem with the Youtube API key"
+            return False, strings['apikeyerror']
     videos = []
     for search_result in search_response.get('items', []):
         if 'videoId' in search_result['id']:
@@ -515,12 +523,8 @@ def video_search(query=None, relatedToVideoId=None, channelId=None):
     return videos, ""
 
 def playlist_search(query, sr, do_shuffle='0'):
-    search_response = youtube.search().list(
-        q=query,
-        part='id,snippet',
-        maxResults=10,
-        type='playlist'
-        ).execute()
+    playlist_id = ''
+    search_response = youtube_search(query, 'playlist', 10)
     for playlist in range(sr, len(search_response.get('items'))):
         if 'playlistId' in search_response.get('items')[playlist]['id']:
             playlist_id = search_response.get('items')[playlist]['id']['playlistId']
@@ -538,7 +542,7 @@ def get_videos_from_playlist(playlist_id):
     data={'nextPageToken':''}
     while 'nextPageToken' in data and len(videos) < 100:
         next_page_token = data['nextPageToken']
-        data = youtube.playlistItems().list(part='snippet',maxResults=50,playlistId=playlist_id,pageToken=next_page_token).execute()
+        data = youtube_playlist_search(playlist_id, next_page_token)
         for item in data['items']:
             try:
                 videos.append(item['snippet']['resourceId']['videoId'])
@@ -551,13 +555,7 @@ def my_playlists_search(query, sr, do_shuffle='0'):
     playlist_id = None
     if 'MY_CHANNEL_ID' in environ:
         channel_id = environ['MY_CHANNEL_ID']
-    search_response = youtube.search().list(
-        q=query,
-        part='id,snippet',
-        maxResults=10,
-        type='playlist',
-        channelId=channel_id
-        ).execute()
+    search_response = youtube_search(query, 'playlist', 10, channel_id=channel_id)
     for playlist in range(sr, len(search_response.get('items'))):
         if 'playlistId' in search_response.get('items')[playlist]['id']:
             playlist_id = search_response.get('items')[playlist]['id']['playlistId']
@@ -571,7 +569,7 @@ def my_playlists_search(query, sr, do_shuffle='0'):
     data={'nextPageToken':''}
     while 'nextPageToken' in data and len(videos) < 200:
         next_page_token = data['nextPageToken']
-        data = youtube.playlistItems().list(part='snippet',maxResults=50,playlistId=playlist_id,pageToken=next_page_token).execute()
+        data = youtube_playlist_search(playlist_id, next_page_token)
         for item in data['items']:
             try:
                 videos.append(item['snippet']['resourceId']['videoId'])
@@ -586,14 +584,8 @@ def my_latest_video():
     if 'MY_CHANNEL_ID' in environ:
         channel_id = environ['MY_CHANNEL_ID']
     if channel_id is None:
-        return build_response(build_short_speechlet_response('You do not have a channel id set', True))
-    search_response = youtube.search().list(
-        part='id,snippet',
-        maxResults=50,
-        type='video',
-        order='date',
-        channelId=channel_id
-        ).execute()
+        return build_response(build_short_speechlet_response(strings['nochannelid'], True))
+    search_response = youtube_search(None, 'video', 50, channel_id=channel_id, order='date')
     videos = []
     for search_result in search_response.get('items', []):
         if 'videoId' in search_result['id']:
@@ -601,20 +593,15 @@ def my_latest_video():
     return videos
 
 def channel_search(query, sr, do_shuffle='0'):
-    search_response = youtube.search().list(
-        q=query,
-        part='id,snippet',
-        maxResults=10,
-        type='channel'
-        ).execute()
-    playlist_id = search_response.get('items')[sr]['id']['channelId']
+    search_response = youtube_search(query, 'channel', 10)
+    channel_id = search_response.get('items')[sr]['id']['channelId']
     playlist_title = search_response.get('items')[sr]['snippet']['title']
     data={'nextPageToken':''}
     videos = []
     while 'nextPageToken' in data and len(videos) < 200:
         next_page_token = data['nextPageToken']
-        data = youtube.search().list(part='snippet',maxResults=50,channelId=playlist_id,pageToken=next_page_token).execute()
-        for item in data['items']:
+        search_response = youtube_search(query, 'video', 50, channel_id=channel_id, pageToken=next_page_token)
+        for item in search_response.get('items'):
             try:
                 videos.append(item['id']['videoId'])
             except:
@@ -624,40 +611,52 @@ def channel_search(query, sr, do_shuffle='0'):
     return videos[0:50], playlist_title
 
 def get_url_and_title(id):
-    if 'youtube_dl' in environ and environ['youtube_dl'].lower() == 'true':
+    if 'youtube_dl' in environ and (environ['youtube_dl'].lower() == 'true' or 'http' in environ['youtube_dl']):
         return get_url_and_title_youtube_dl(id)
     else:
         return get_url_and_title_pytube(id)
 
-def get_url_and_title_youtube_dl(id):
-    import youtube_dl
-    logger.info('Getting youtube-dl url for https://www.youtube.com/watch?v='+id)
-    youtube_dl_properties = {}
-    if 'proxy_enabled' in environ and 'proxy' in environ and environ['proxy_enabled'].lower() == 'true':
-        youtube_dl_properties['proxy'] = environ['proxy']
-    try:
-        with youtube_dl.YoutubeDL(youtube_dl_properties) as ydl:
-            yt_url = 'http://www.youtube.com/watch?v='+id
-            info = ydl.extract_info(yt_url, download=False)
-    except HTTPError as e:
-        logger.info('HTTPError code '+str(e.code))
-        return False,False
-    except:
-        logger.info('Other ytdl error')
-        return False,False
+def get_url_and_title_youtube_dl(id, retry=True):
+    if 'youtube_dl' in environ and 'http' in environ['youtube_dl']:
+        params = {'id': id}
+        r = requests.get(environ['youtube_dl'], params=params)
+        info = r.json()
+    else:
+        import youtube_dl
+        logger.info('Getting youtube-dl url for https://www.youtube.com/watch?v='+id)
+        youtube_dl_properties = {}
+        if 'proxy_enabled' in environ and 'proxy' in environ and environ['proxy_enabled'].lower() == 'true':
+            youtube_dl_properties['proxy'] = environ['proxy']
+        try:
+            with youtube_dl.YoutubeDL(youtube_dl_properties) as ydl:
+                yt_url = 'http://www.youtube.com/watch?v='+id
+                info = ydl.extract_info(yt_url, download=False)
+        except:
+            logger.info('youtube_dl error')
+            if 'youtube_dl_error_mirror' in environ and 'http' in environ['youtube_dl_error_mirror']:
+                logger.info('Trying mirror: '+environ['youtube_dl_error_mirror'])
+                params = {'id': id, 'function_name': environ['AWS_LAMBDA_FUNCTION_NAME']}
+                r = requests.get(environ['youtube_dl_error_mirror'], params=params)
+                info = r.json()
+            elif retry:
+                logger.info('trying pytube')
+                return get_url_and_title_pytube(id, False)
+            else:
+                return False,False
     if info['is_live'] == True:
         video_or_audio[1] = 'video'
         return info['url'], info['title']
-        #return get_live_video_url_and_title(id) # Test both of these
     for f in info['formats']:
         if video_or_audio[1] == 'audio' and f['vcodec'] == 'none' and f['ext'] == 'm4a':
-            return f['url'], info['title'] # Test this
+            return f['url'], info['title']
         if video_or_audio[1] == 'video' and f['vcodec'] != 'none' and f['acodec'] != 'none':
-            return f['url'], info['title'] # Test this
+            return f['url'], info['title']
     logger.info('Unable to get URL for '+id)
     return None, None
 
-def get_url_and_title_pytube(id):
+def get_url_and_title_pytube(id, retry=True):
+    if 'pytube' in environ and 'http' in environ['pytube']:
+        return get_url_and_title_pytube_server(id)
     from pytube import YouTube
     from pytube.exceptions import LiveStreamError
     proxy_list = {}
@@ -671,6 +670,8 @@ def get_url_and_title_pytube(id):
         return get_live_video_url_and_title(id)
     except HTTPError as e:
         logger.info('HTTPError code '+str(e.code))
+        if retry:
+            return get_url_and_title_youtube_dl(id, False)
         return False,False
     except:
         logger.info('Unable to get URL for '+id)
@@ -680,7 +681,19 @@ def get_url_and_title_pytube(id):
     else:
         first_stream = yt.streams.filter(only_audio=True, subtype='mp4').first()
     logger.info(first_stream.url)
-    return first_stream.url, yt.title
+    return first_stream.url, first_stream.player_config_args['player_response']['videoDetails']['title']
+
+def get_url_and_title_pytube_server(id):
+    params = {'id': id, 'video': video_or_audio[1]}
+    r = requests.get(environ['pytube'], params=params)
+    info = r.json()
+    if info['is_live'] == True:
+        logger.info(id+' is a live video')
+        return get_live_video_url_and_title(id)
+    if info['url'] is not None:
+        return info['url'], info['title']
+    logger.info('Unable to get URL for '+id)
+    return False, False
 
 def get_live_video_url_and_title(id):
     logger.info('Live video?')
@@ -729,7 +742,7 @@ def next_playlist(event):
 def search(event):
     session = event['session']
     intent = event['request']['intent']
-    startTime = time()
+    startTime = datetime.now()
     query = ''
     if 'slots' in intent and 'query' in intent['slots']:
         query = intent['slots']['query']['value']
@@ -779,14 +792,14 @@ def search(event):
         return build_response(build_cardless_speechlet_response(strings['novideo'], None, True))
     next_url = None
     for i,id in enumerate(videos):
-        if playlist_channel_video != strings['video'] and time() - startTime > 8:
+        if playlist_channel_video != strings['video'] and (datetime.now() - startTime).total_seconds() > 8:
             return build_response(build_cardless_speechlet_response(playlist_channel_video+" "+playlist_title+" " + strings['notworked'], None, False), sessionAttributes)
         playlist['v'+str(i)]=id
         if next_url is None:
             playlist['p'] = i
             next_url, title = get_url_and_title(id)
     if next_url == False:
-        return build_response(build_short_speechlet_response('This skill is being throttled by YouTube, please try again later', True))
+        return build_response(build_short_speechlet_response(strings['throttled'], True))
     next_token = convert_dict_to_token(playlist)
     if playlist_title is None:
         speech_output = strings['playing'] + ' ' + title
@@ -839,7 +852,7 @@ def play_more_like_this(event):
             playlist['p'] = i
             next_url, title = get_url_and_title(id)
     if next_url == False:
-        return build_response(build_short_speechlet_response('This skill is being throttled by YouTube, please try again later', True))
+        return build_response(build_short_speechlet_response(strings['throttled'], True))
     next_token = convert_dict_to_token(playlist)
     speech_output = strings['playing']+' '+title
     return build_response(build_cardless_audio_speechlet_response(speech_output, should_end_session, next_url, next_token))
@@ -865,7 +878,7 @@ def skip_action(event, skip):
                 next_url, title = get_url_and_title(id)
         next_token = convert_dict_to_token(playlist)
     if next_url == False:
-        return build_response(build_short_speechlet_response('This skill is being throttled by YouTube, please try again later', True))
+        return build_response(build_short_speechlet_response(strings['throttled'], True))
     speech_output = strings['playing']+' '+title
     return build_response(build_cardless_audio_speechlet_response(speech_output, should_end_session, next_url, next_token))
 
@@ -1014,7 +1027,7 @@ def say_timestamp(event):
     else:
         speech_output = strings['nothingplaying']
     return build_response(build_short_speechlet_response(speech_output, should_end_session))
-    
+
 def convert_token_to_dict(token):
     pi=token.split('&')
     playlist={}
@@ -1023,7 +1036,7 @@ def convert_token_to_dict(token):
         val=i.split('=')[1]
         playlist[key]=val
     return playlist
-    
+
 def convert_dict_to_token(playlist):
     token = "&".join(["=".join([key, str(val)]) for key, val in playlist.items()])
     return token
@@ -1051,7 +1064,7 @@ def get_next_url_and_token(current_token, skip):
     while next_url is None:
         next_playing = next_playing + skip
         if shuffle_mode and skip != 0:
-            next_playing = randint(0,number_of_videos-1)
+            next_playing = randrange(number_of_videos)
         if next_playing < 0:
             if loop_mode:
                 next_playing = number_of_videos - 1
@@ -1093,9 +1106,18 @@ def started(event):
     playlist = convert_token_to_dict(current_token)
     now_playing = playlist['p']
     id = playlist['v'+now_playing]
-    next_url, title = get_url_and_title(id)
+    title = get_title(id)
     if title:
         add_to_list(event, title)
+
+def get_title(id):
+    try:
+        params = {'part': 'snippet', 'id': id, 'key': environ['DEVELOPER_KEY']}
+        youtube_search_url = 'https://www.googleapis.com/youtube/v3/videos'
+        r = requests.get(youtube_search_url, params=params)
+        return r.json()['items'][0]['snippet']['title']
+    except:
+        return None
 
 def finished(event):
     logger.info('finished')
