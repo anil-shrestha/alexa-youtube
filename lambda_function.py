@@ -422,35 +422,47 @@ def add_to_list(event, title):
         trim_list(event, listId)
 
 def check_favorite_videos(event, query):
-    videos, playlist_channel_video = [], strings['video']
+    logger.info('checking for faves')
     listId = get_list_id(event, 'YouTube Favorites')
     if listId is None:
+        logger.info('No Youtube Favorites list found')
         return [], strings['video']
     items = get_list(event, listId)
     for item in items:
         val = item['value']
+        logger.info('checking '+val)
         name, url = val.split('|')
         if query.lower() == name.lower().strip():
-            videos, playlist_channel_video = get_videos_from_url(url.strip())
-    return videos, playlist_channel_video
+            logger.info('match found')
+            return get_videos_from_url(url.strip())
+    return [], strings['video']
 
 def get_videos_from_url(url):
     t = re.search('youtube.com\/watch\?v=.*&list=([^&]+)', url, re.I)
     if t:
+        logger.info('match on t1')
         playlist_id = t.groups()[0]
         videos = get_videos_from_playlist(playlist_id)
         return videos, strings['playlist']
     t = re.search('youtube.com\/playlist\?list=([^&]+)', url, re.I)
     if t:
+        logger.info('match on t2')
         playlist_id = t.groups()[0]
         videos = get_videos_from_playlist(playlist_id)
         return videos, strings['playlist']
     t = re.search('youtube.com\/watch\?v=([^&]+)', url, re.I)
     if t:
+        logger.info('match on t3')
         video_id = t.groups()[0]
-        return video_id, strings['video']
+        return [video_id], strings['video']
+    t = re.search('youtu.be\/([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t4')
+        video_id = t.groups()[0]
+        return [video_id], strings['video']
     t = re.search('youtube.com\/channel\/([^&]+)', url, re.I)
     if t:
+        logger.info('match on t5')
         channel_id = t.groups()[0]
         videos, errorMessage = video_search(channelId=channel_id)
         return videos, strings['channel']
