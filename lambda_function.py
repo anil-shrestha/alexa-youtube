@@ -466,6 +466,15 @@ def get_videos_from_url(url):
         channel_id = t.groups()[0]
         videos, errorMessage = video_search(channelId=channel_id)
         return videos, strings['channel']
+    t = re.search('youtube.com\/user\/([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t6')
+        username = t.groups()[0]
+        channel_info = youtube_channel_search(username)
+        if 'items' in channel_info and len(channel_info['items']) > 0 and 'id' in channel_info['items'][0]:
+            channel_id = channel_info['items'][0]['id']
+            videos, errorMessage = video_search(channelId=channel_id)
+            return videos, strings['channel']
     return [], strings['video']
 
 def get_welcome_response(event):
@@ -516,6 +525,15 @@ def youtube_playlist_search(playlist_id, pageToken=None):
     if 'youtube_playlist_search_url' in environ:
         youtube_search_url = environ['youtube_playlist_search_url']
     r = requests.get(youtube_search_url, params=params)
+    return r.json()
+
+def youtube_channel_search(username):
+    params = {}
+    for kv in ([['maxResults',50],['forUsername',username],['part','id'],['key',environ['DEVELOPER_KEY']]]):
+        k = kv[0]
+        v = kv[1]
+        params[k] = v
+    r = requests.get('https://www.googleapis.com/youtube/v3/channels', params=params)
     return r.json()
 
 def video_search(query=None, relatedToVideoId=None, channelId=None):
