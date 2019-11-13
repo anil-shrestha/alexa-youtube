@@ -312,7 +312,7 @@ def get_headers(event):
         logger.info('apiAccessToken not found')
         return False
 
-def create_list(event, list_title):
+def create_list(event, list_title, list_items=[]):
     headers = get_headers(event)
     if not headers:
         return False
@@ -324,6 +324,9 @@ def create_list(event, list_title):
     r = requests.post(url, headers=headers, data=json.dumps(data))
     if r.status_code == 201:
         logger.info('List created')
+        listId = r.json()['listId']
+        for list_item in reversed(list_items):
+            post_list_item(event, listId, headers, list_item)
         return True
     elif r.status_code == 409:
         logger.info('List already exists')
@@ -383,12 +386,16 @@ def create_list_item(event, listId, title):
         utc = utc.replace(tzinfo=from_zone)
         local = utc.astimezone(to_zone)
         the_date = local.strftime('%b %d %Y %H:%M:%S')
-        data = {
-            "value": the_date+' '+title,
-            "status": "active"
-        }
-        url = event['context']['System']['apiEndpoint'] + '/v2/householdlists/'+listId+'/items/'
-        r = requests.post(url, headers=headers, data=json.dumps(data))
+        text = the_date+' '+title
+        post_list_item(event, listId, headers, text)
+
+def post_list_item(event, listId, headers, text):
+    data = {
+        "value": text,
+        "status": "active"
+    }
+    url = event['context']['System']['apiEndpoint'] + '/v2/householdlists/'+listId+'/items/'
+    r = requests.post(url, headers=headers, data=json.dumps(data))
 
 def get_list(event, listId):
     headers = get_headers(event)
@@ -431,7 +438,10 @@ def check_favorite_videos(event, query):
     for item in items:
         val = item['value']
         logger.info('checking '+val)
-        name, url = val.split('|')
+        try:
+            name, url = val.split('|')
+        except:
+            continue
         if query.lower() == name.lower().strip():
             logger.info('match found')
             return get_videos_from_url(url.strip())
@@ -479,7 +489,7 @@ def get_videos_from_url(url):
 
 def get_welcome_response(event):
     list_created = create_list(event, 'YouTube')
-    list_created = create_list(event, 'YouTube Favorites')
+    list_created = create_list(event, 'YouTube Favorites', ['Add shortcuts to your favorite videos or playlists like this:','that song I like | https://youtu.be/gJLIiF15wjQ', 'super awesome playlist | https://www.youtube.com/playlist?list=PL1EQjK4xc6hsirkCQq-MHfmUqGMkSgUTn'])
     speech_output = strings['welcome1']
     reprompt_text = strings['welcome2']
     should_end_session = False
@@ -533,7 +543,10 @@ def youtube_channel_search(username):
         k = kv[0]
         v = kv[1]
         params[k] = v
-    r = requests.get('https://www.googleapis.com/youtube/v3/channels', params=params)
+    youtube_search_url = 'https://www.googleapis.com/youtube/v3/channels'
+    if 'youtube_channel_search_url' in environ:
+        youtube_search_url = environ['youtube_channel_search_url']
+    r = requests.get(youtube_search_url, params=params)
     return r.json()
 
 def video_search(query=None, relatedToVideoId=None, channelId=None):
@@ -820,6 +833,8 @@ def search(event):
             return build_response(build_cardless_speechlet_response(errorMessage, None, True))
     if videos == []:
         return build_response(build_cardless_speechlet_response(strings['novideo'], None, True))
+    if len(videos) == 1:
+        video_or_audio[1] = 'video'
     next_url = None
     for i,id in enumerate(videos):
         if playlist_channel_video != strings['video'] and (datetime.now() - startTime).total_seconds() > 8:
