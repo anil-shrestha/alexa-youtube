@@ -591,7 +591,7 @@ def get_videos_from_playlist(playlist_id):
                 videos.append(item['snippet']['resourceId']['videoId'])
             except:
                 pass
-    return videos
+    return videos[0:50]
 
 def my_playlists_search(query, sr, do_shuffle='0'):
     channel_id = None
