@@ -428,7 +428,7 @@ def add_to_list(event, title):
         logger.info('Created item')
         trim_list(event, listId)
 
-def check_favorite_videos(event, query):
+def check_favorite_videos(event, query, do_shuffle='0'):
     logger.info('checking for faves')
     listId = get_list_id(event, 'YouTube Favorites')
     if listId is None:
@@ -444,7 +444,10 @@ def check_favorite_videos(event, query):
             continue
         if query.lower() == name.lower().strip():
             logger.info('match found')
-            return get_videos_from_url(url.strip())
+            videos, string_to_return = get_videos_from_url(url.strip())
+            if do_shuffle == '1':
+                shuffle(videos)
+            return videos[0:50], string_to_return
     return [], strings['video']
 
 def get_videos_from_url(url):
@@ -591,7 +594,7 @@ def get_videos_from_playlist(playlist_id):
                 videos.append(item['snippet']['resourceId']['videoId'])
             except:
                 pass
-    return videos[0:50]
+    return videos
 
 def my_playlists_search(query, sr, do_shuffle='0'):
     channel_id = None
@@ -812,7 +815,7 @@ def search(event):
     if intent_name == "ShuffleIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "ShuffleChannelIntent" or intent_name == "ShuffleMyPlaylistsIntent":
         playlist['s'] = '1'
     playlist['l'] = '0'
-    videos, playlist_channel_video = check_favorite_videos(event, query)
+    videos, playlist_channel_video = check_favorite_videos(event, query, playlist['s'])
     if videos == []:
         if intent_name == "PlaylistIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "NextPlaylistIntent":
             videos, playlist_title, playlist['sr'] = playlist_search(query, sr, playlist['s'])
