@@ -312,7 +312,7 @@ def get_headers(event):
         logger.info('apiAccessToken not found')
         return False
 
-def create_list(event, list_title):
+def create_list(event, list_title, list_items=[]):
     headers = get_headers(event)
     if not headers:
         return False
@@ -324,6 +324,9 @@ def create_list(event, list_title):
     r = requests.post(url, headers=headers, data=json.dumps(data))
     if r.status_code == 201:
         logger.info('List created')
+        listId = r.json()['listId']
+        for list_item in reversed(list_items):
+            post_list_item(event, listId, headers, list_item)
         return True
     elif r.status_code == 409:
         logger.info('List already exists')
@@ -383,12 +386,16 @@ def create_list_item(event, listId, title):
         utc = utc.replace(tzinfo=from_zone)
         local = utc.astimezone(to_zone)
         the_date = local.strftime('%b %d %Y %H:%M:%S')
-        data = {
-            "value": the_date+' '+title,
-            "status": "active"
-        }
-        url = event['context']['System']['apiEndpoint'] + '/v2/householdlists/'+listId+'/items/'
-        r = requests.post(url, headers=headers, data=json.dumps(data))
+        text = the_date+' '+title
+        post_list_item(event, listId, headers, text)
+
+def post_list_item(event, listId, headers, text):
+    data = {
+        "value": text,
+        "status": "active"
+    }
+    url = event['context']['System']['apiEndpoint'] + '/v2/householdlists/'+listId+'/items/'
+    r = requests.post(url, headers=headers, data=json.dumps(data))
 
 def get_list(event, listId):
     headers = get_headers(event)
@@ -421,8 +428,71 @@ def add_to_list(event, title):
         logger.info('Created item')
         trim_list(event, listId)
 
+def check_favorite_videos(event, query, do_shuffle='0'):
+    logger.info('checking for faves')
+    listId = get_list_id(event, 'YouTube Favorites')
+    if listId is None:
+        logger.info('No Youtube Favorites list found')
+        return [], strings['video'], None
+    items = get_list(event, listId)
+    for item in items:
+        val = item['value']
+        logger.info('checking '+val)
+        try:
+            name, url = val.split('|')
+        except:
+            continue
+        if query.lower() == name.lower().strip():
+            logger.info('match found')
+            videos, string_to_return, playlist_title = get_videos_from_url(url.strip())
+            if do_shuffle == '1':
+                shuffle(videos)
+            return videos[0:50], string_to_return, playlist_title
+    return [], strings['video'], None
+
+def get_videos_from_url(url):
+    t = re.search('youtube.com\/watch\?v=.*&list=([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t1')
+        playlist_id = t.groups()[0]
+        videos = get_videos_from_playlist(playlist_id)
+        return videos, strings['playlist'], get_title(playlist_id, 'playlists')
+    t = re.search('youtube.com\/playlist\?list=([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t2')
+        playlist_id = t.groups()[0]
+        videos = get_videos_from_playlist(playlist_id)
+        return videos, strings['playlist'], get_title(playlist_id, 'playlists')
+    t = re.search('youtube.com\/watch\?v=([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t3')
+        video_id = t.groups()[0]
+        return [video_id], strings['video'], None
+    t = re.search('youtu.be\/([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t4')
+        video_id = t.groups()[0]
+        return [video_id], strings['video'], None
+    t = re.search('youtube.com\/channel\/([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t5')
+        channel_id = t.groups()[0]
+        videos, errorMessage = video_search(channelId=channel_id)
+        return videos, strings['channel'], get_title(channel_id, 'channels')
+    t = re.search('youtube.com\/user\/([^&]+)', url, re.I)
+    if t:
+        logger.info('match on t6')
+        username = t.groups()[0]
+        channel_info = youtube_channel_search(username)
+        if 'items' in channel_info and len(channel_info['items']) > 0 and 'id' in channel_info['items'][0]:
+            channel_id = channel_info['items'][0]['id']
+            videos, errorMessage = video_search(channelId=channel_id)
+            return videos, strings['channel'], get_title(channel_id, 'channels')
+    return [], strings['video'], None
+
 def get_welcome_response(event):
     list_created = create_list(event, 'YouTube')
+    list_created = create_list(event, 'YouTube Favorites', ['Add shortcuts to your favorite videos or playlists like this:','that song I like | https://youtu.be/gJLIiF15wjQ', 'super awesome playlist | https://www.youtube.com/playlist?list=PL1EQjK4xc6hsirkCQq-MHfmUqGMkSgUTn'])
     speech_output = strings['welcome1']
     reprompt_text = strings['welcome2']
     should_end_session = False
@@ -470,9 +540,21 @@ def youtube_playlist_search(playlist_id, pageToken=None):
     r = requests.get(youtube_search_url, params=params)
     return r.json()
 
-def video_search(query, relatedToVideoId=None):
+def youtube_channel_search(username):
+    params = {}
+    for kv in ([['maxResults',50],['forUsername',username],['part','id'],['key',environ['DEVELOPER_KEY']]]):
+        k = kv[0]
+        v = kv[1]
+        params[k] = v
+    youtube_search_url = 'https://www.googleapis.com/youtube/v3/channels'
+    if 'youtube_channel_search_url' in environ:
+        youtube_search_url = environ['youtube_channel_search_url']
+    r = requests.get(youtube_search_url, params=params)
+    return r.json()
+
+def video_search(query=None, relatedToVideoId=None, channelId=None):
     try:
-        search_response = youtube_search(query, 'video', 50, relatedToVideoId)
+        search_response = youtube_search(query, 'video', 50, relatedToVideoId, channelId)
     except:
         return False, strings['youtubeerror']
     if 'error' in search_response:
@@ -496,9 +578,15 @@ def playlist_search(query, sr, do_shuffle='0'):
     sr = playlist
     logger.info('Playlist info: https://www.youtube.com/playlist?list='+playlist_id)
     playlist_title = search_response.get('items')[sr]['snippet']['title']
+    videos = get_videos_from_playlist(playlist_id)
+    if do_shuffle == '1':
+        shuffle(videos)
+    return videos[0:50], playlist_title, sr
+
+def get_videos_from_playlist(playlist_id):
     videos = []
     data={'nextPageToken':''}
-    while 'nextPageToken' in data and len(videos) < 200:
+    while 'nextPageToken' in data and len(videos) < 100:
         next_page_token = data['nextPageToken']
         data = youtube_playlist_search(playlist_id, next_page_token)
         for item in data['items']:
@@ -506,9 +594,7 @@ def playlist_search(query, sr, do_shuffle='0'):
                 videos.append(item['snippet']['resourceId']['videoId'])
             except:
                 pass
-    if do_shuffle == '1':
-        shuffle(videos)
-    return videos[0:50], playlist_title, sr
+    return videos
 
 def my_playlists_search(query, sr, do_shuffle='0'):
     channel_id = None
@@ -729,25 +815,29 @@ def search(event):
     if intent_name == "ShuffleIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "ShuffleChannelIntent" or intent_name == "ShuffleMyPlaylistsIntent":
         playlist['s'] = '1'
     playlist['l'] = '0'
-    if intent_name == "PlaylistIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "NextPlaylistIntent":
-        videos, playlist_title, playlist['sr'] = playlist_search(query, sr, playlist['s'])
-        playlist_channel_video = strings['playlist']
-    elif intent_name == "SearchMyPlaylistsIntent" or intent_name == "ShuffleMyPlaylistsIntent":
-        videos, playlist_title, playlist['sr'] = my_playlists_search(query, sr, playlist['s'])
-        playlist_channel_video = strings['playlist']
-    elif intent_name == "ChannelIntent" or intent_name == "ShuffleChannelIntent":
-        videos, playlist_title = channel_search(query, sr, playlist['s'])
-        playlist_channel_video = strings['channel']
-    elif intent_name == "PlayMyLatestVideoIntent":
-        videos = my_latest_video()
-        playlist_channel_video = strings['video']
-    else:
-        videos, errorMessage = video_search(query)
-        playlist_channel_video = strings['video']
-    if videos == False:
-        return build_response(build_cardless_speechlet_response(errorMessage, None, True))
+    videos, playlist_channel_video, playlist_title = check_favorite_videos(event, query, playlist['s'])
+    if videos == []:
+        if intent_name == "PlaylistIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "NextPlaylistIntent":
+            videos, playlist_title, playlist['sr'] = playlist_search(query, sr, playlist['s'])
+            playlist_channel_video = strings['playlist']
+        elif intent_name == "SearchMyPlaylistsIntent" or intent_name == "ShuffleMyPlaylistsIntent":
+            videos, playlist_title, playlist['sr'] = my_playlists_search(query, sr, playlist['s'])
+            playlist_channel_video = strings['playlist']
+        elif intent_name == "ChannelIntent" or intent_name == "ShuffleChannelIntent":
+            videos, playlist_title = channel_search(query, sr, playlist['s'])
+            playlist_channel_video = strings['channel']
+        elif intent_name == "PlayMyLatestVideoIntent":
+            videos = my_latest_video()
+            playlist_channel_video = strings['video']
+        else:
+            videos, errorMessage = video_search(query)
+            playlist_channel_video = strings['video']
+        if videos == False:
+            return build_response(build_cardless_speechlet_response(errorMessage, None, True))
     if videos == []:
         return build_response(build_cardless_speechlet_response(strings['novideo'], None, True))
+    if len(videos) == 1:
+        video_or_audio[1] = 'video'
     next_url = None
     for i,id in enumerate(videos):
         if playlist_channel_video != strings['video'] and (datetime.now() - startTime).total_seconds() > 8:
@@ -1068,14 +1158,16 @@ def started(event):
     if title:
         add_to_list(event, title)
 
-def get_title(id):
+def get_title(id, type_='videos'):
     try:
         params = {'part': 'snippet', 'id': id, 'key': environ['DEVELOPER_KEY']}
-        youtube_search_url = 'https://www.googleapis.com/youtube/v3/videos'
+        youtube_search_url = 'https://www.googleapis.com/youtube/v3/'+type_
         r = requests.get(youtube_search_url, params=params)
         return r.json()['items'][0]['snippet']['title']
     except:
         return None
+
+
 
 def finished(event):
     logger.info('finished')
