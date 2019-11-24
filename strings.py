@@ -63,6 +63,8 @@ strings_en = {
 'apikeyerror':"Sorry, there was a problem with the Youtube API key.",
 'youtubeerror':"There was a problem with the youtube search response.",
 'nochannelid':"You do not have a channel id set.",
+'noplaylistresults':"There were no playlist results found.",
+'nomoreplaylists':"There are no more playlist results.",
 }
 strings_fr = {
 'welcome1':"Bienvenue sur Youtube. Dite, par exemple, jouer une vidéo de Madonna.",

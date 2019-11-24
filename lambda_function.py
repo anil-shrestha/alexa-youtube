@@ -606,7 +606,12 @@ def video_search(query=None, relatedToVideoId=None, channelId=None):
 
 def playlist_search(query, sr, do_shuffle='0'):
     playlist_id = ''
+    errorMessage = ''
     search_response = youtube_search(query, 'playlist', 10)
+    if sr > len(search_response.get('items')):
+        return False, '', sr, strings['nomoreplaylists']
+    if len(search_response.get('items')) == 0:
+        return False, '', sr, strings['noplaylistresults']
     for playlist in range(sr, len(search_response.get('items'))):
         if 'playlistId' in search_response.get('items')[playlist]['id']:
             playlist_id = search_response.get('items')[playlist]['id']['playlistId']
@@ -617,7 +622,7 @@ def playlist_search(query, sr, do_shuffle='0'):
     videos = get_videos_from_playlist(playlist_id)
     if do_shuffle == '1':
         shuffle(videos)
-    return videos[0:50], playlist_title, sr
+    return videos[0:50], playlist_title, sr, errorMessage
 
 
 def get_videos_from_playlist(playlist_id):
@@ -866,7 +871,7 @@ def search(event):
     videos, playlist_channel_video, playlist_title = check_favorite_videos(event, query, playlist['s'])
     if videos == []:
         if intent_name == "PlaylistIntent" or intent_name == "ShufflePlaylistIntent" or intent_name == "NextPlaylistIntent":
-            videos, playlist_title, playlist['sr'] = playlist_search(query, sr, playlist['s'])
+            videos, playlist_title, playlist['sr'], errorMessage = playlist_search(query, sr, playlist['s'])
             playlist_channel_video = strings['playlist']
         elif intent_name == "SearchMyPlaylistsIntent" or intent_name == "ShuffleMyPlaylistsIntent":
             videos, playlist_title, playlist['sr'] = my_playlists_search(query, sr, playlist['s'])
