@@ -12,6 +12,7 @@ import re
 import json
 from datetime import datetime
 from dateutil import tz
+from fuzzywuzzy import fuzz
 from strings import *
 strings = strings_en
 logger = logging.getLogger()
@@ -560,7 +561,21 @@ def youtube_search(query, search_type, maxResults, relatedToVideoId=None, channe
     return r.json()
 
 
-def youtube_playlist_search(playlist_id, pageToken=None):
+def youtube_playlist_search(channel_id, pageToken=None):
+    params = {}
+    for kv in ([['maxResults', 50], ['channelId', channel_id], ['pageToken', pageToken],
+                ['part', 'snippet'], ['key', environ['DEVELOPER_KEY']]]):
+        k = kv[0]
+        v = kv[1]
+        params[k] = v
+    youtube_search_url = 'https://www.googleapis.com/youtube/v3/playlists'
+    if 'youtube_playlist_search_url' in environ:
+        youtube_search_url = environ['youtube_playlist_search_url']
+    r = requests.get(youtube_search_url, params=params)
+    return r.json()
+
+
+def youtube_playlist_items_search(playlist_id, pageToken=None):
     params = {}
     for kv in ([['maxResults', 50], ['playlistId', playlist_id], ['pageToken', pageToken],
                 ['part', 'snippet'], ['key', environ['DEVELOPER_KEY']]]):
@@ -568,8 +583,8 @@ def youtube_playlist_search(playlist_id, pageToken=None):
         v = kv[1]
         params[k] = v
     youtube_search_url = 'https://www.googleapis.com/youtube/v3/playlistItems'
-    if 'youtube_playlist_search_url' in environ:
-        youtube_search_url = environ['youtube_playlist_search_url']
+    if 'youtube_playlist_items_search_url' in environ:
+        youtube_search_url = environ['youtube_playlist_items_search_url']
     r = requests.get(youtube_search_url, params=params)
     return r.json()
 
@@ -630,7 +645,7 @@ def get_videos_from_playlist(playlist_id):
     data = {'nextPageToken': ''}
     while 'nextPageToken' in data and len(videos) < 100:
         next_page_token = data['nextPageToken']
-        data = youtube_playlist_search(playlist_id, next_page_token)
+        data = youtube_playlist_items_search(playlist_id, next_page_token)
         for item in data['items']:
             try:
                 videos.append(item['snippet']['resourceId']['videoId'])
@@ -645,6 +660,13 @@ def my_playlists_search(query, sr, do_shuffle='0'):
     if 'MY_CHANNEL_ID' in environ:
         channel_id = environ['MY_CHANNEL_ID']
     search_response = youtube_search(query, 'playlist', 10, channel_id=channel_id)
+    if len(search_response.get('items')) == 0:
+        search_response = youtube_playlist_search(channel_id)
+        for playlist in search_response.get('items'):
+            title = playlist['snippet']['title']
+            playlist['ratio'] = fuzz.ratio(query.lower(), title.lower())
+            playlist['id'] = {'playlistId': playlist['id']}
+        search_response['items'] = sorted(search_response['items'], key=lambda k: k['ratio'], reverse=True)
     for playlist in range(sr, len(search_response.get('items'))):
         if 'playlistId' in search_response.get('items')[playlist]['id']:
             playlist_id = search_response.get('items')[playlist]['id']['playlistId']
@@ -658,7 +680,7 @@ def my_playlists_search(query, sr, do_shuffle='0'):
     data = {'nextPageToken': ''}
     while 'nextPageToken' in data and len(videos) < 200:
         next_page_token = data['nextPageToken']
-        data = youtube_playlist_search(playlist_id, next_page_token)
+        data = youtube_playlist_items_search(playlist_id, next_page_token)
         for item in data['items']:
             try:
                 videos.append(item['snippet']['resourceId']['videoId'])
