@@ -546,6 +546,8 @@ def do_nothing():
 
 
 def youtube_search(query, search_type, maxResults, relatedToVideoId=None, channel_id=None, order=None, pageToken=None):
+    if 'DEVELOPER_KEY' not in environ:
+        return {'error': {'code': 400}}
     params = {}
     for kv in ([['q', query], ['type', search_type], ['maxResults', maxResults],
                 ['relatedToVideoId', relatedToVideoId], ['channelId', channel_id], ['order', order], ['pageToken', pageToken],
