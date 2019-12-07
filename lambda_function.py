@@ -748,10 +748,10 @@ def get_url_and_title_youtube_dl(id, retry=True):
             with youtube_dl.YoutubeDL(youtube_dl_properties) as ydl:
                 yt_url = 'http://www.youtube.com/watch?v='+id
                 info = ydl.extract_info(yt_url, download=False)
-        except youtube_dl.utils.DownloadError:
-            logger.info(id+' is unavailable')
-            return None, None
-        except:
+        except Exception as e:
+            if 'unavailable' in e.__str__() or 'not available' in e.__str__():
+                logger.info(id+' is unavailable')
+                return None, None
             logger.info('youtube_dl error')
             if 'youtube_dl_error_mirror' in environ and 'http' in environ['youtube_dl_error_mirror']:
                 logger.info('Trying mirror: '+environ['youtube_dl_error_mirror'])
