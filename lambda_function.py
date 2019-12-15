@@ -1110,6 +1110,9 @@ def resume(event, offsetInMilliseconds=None):
 
 
 def change_mode(event, mode, value):
+    if 'token' not in event['context']['AudioPlayer']:
+        speech_output = strings['nothingplaying']
+        return build_response(build_short_speechlet_response(speech_output, True))
     current_token = event['context']['AudioPlayer']['token']
     should_end_session = True
     playlist = convert_token_to_dict(current_token)
