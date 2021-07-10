@@ -1730,6 +1730,9 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
                 'eurl': 'https://youtube.googleapis.com/v/' + video_id,
                 'sts': self._search_regex(
                     r'"sts"\s*:\s*(\d+)', embed_webpage, 'sts', default=''),
+                'html5': 1,
+                'c': 'TVHTML5',
+                'cver': '6.20180913',
             })
             video_info_url = proto + '://www.youtube.com/get_video_info?' + data
             video_info_webpage = self._download_webpage(
@@ -1780,6 +1783,9 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
                         'eurl': '',
                         'gl': 'US',
                         'hl': 'en',
+                        'html5': 1,
+                        'c': 'TVHTML5',
+                        'cver': '6.20180913',
                     }
                     if el:
                         query['el'] = el
